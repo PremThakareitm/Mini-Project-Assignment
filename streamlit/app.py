@@ -5,6 +5,13 @@ Supports HTTP REST connection to FastAPI backend AND seamless in-memory model fa
 """
 
 import os
+import sys
+
+# Ensure project root directory is in sys.path when deployed on Streamlit Cloud or subdirectories
+ROOT_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
+if ROOT_DIR not in sys.path:
+    sys.path.insert(0, ROOT_DIR)
+
 import requests
 import joblib
 import pandas as pd
@@ -17,7 +24,7 @@ from src.evaluation.explainability import explain_single_prediction
 
 # API endpoint configuration
 API_URL = os.getenv("API_URL", "http://localhost:8000")
-MODEL_PATH = "artifacts/model.joblib"
+MODEL_PATH = os.path.join(ROOT_DIR, "artifacts", "model.joblib")
 
 # Page Configuration
 st.set_page_config(
@@ -426,7 +433,7 @@ elif page == "📊 Market Intelligence":
     st.markdown('<p class="main-header">Indian Startup Market Intelligence</p>', unsafe_allow_html=True)
     st.write("Descriptive historical statistics across stages, sectors, and investor hubs.")
 
-    data_file = "Indian_Investor_Dataset_2026.csv"
+    data_file = os.path.join(ROOT_DIR, "Indian_Investor_Dataset_2026.csv")
     if os.path.exists(data_file):
         df = pd.read_csv(data_file)
 
