@@ -1,0 +1,23 @@
+cmd: .venv/bin/python scripts/prepare_data.py
+deps:
+- path: Indian_Investor_Dataset_2026.csv
+  hash: md5
+  md5: 9442955aabbfc5a0b3720ab6e7d49c3c
+  size: 851883
+- path: scripts/prepare_data.py
+  hash: md5
+  md5: 7e4e00e840051b1cfb37069e9d8c1218
+  size: 1035
+- path: src/data/clean_data.py
+  hash: md5
+  md5: 3059dd50c8c590e2810d348a691f275f
+  size: 2978
+- path: src/data/ingest_validate.py
+  hash: md5
+  md5: f4239f1bea013e316707821774ef75f7
+  size: 3245
+outs:
+- path: data/processed/prepared_data.csv
+  hash: md5
+  md5: da766dddd1c5bc75797cea021956e4fc
+  size: 872629

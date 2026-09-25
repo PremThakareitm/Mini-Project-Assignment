@@ -1,0 +1,55 @@
+data:
+  raw_path: "Indian_Investor_Dataset_2026.csv"
+  prepared_path: "data/processed/prepared_data.csv"
+  train_path: "data/processed/train.csv"
+  test_path: "data/processed/test.csv"
+  reference_path: "data/processed/training_reference.csv"
+  target_col: "average_ticket_usd"
+  test_size: 0.2
+  random_state: 42
+
+features:
+  excluded_leakage_cols:
+    - "min_investment_usd"
+    - "max_investment_usd"
+    - "investor_id"
+    - "website"
+    - "last_updated"
+  numerical_cols:
+    - "founded_year"
+    - "portfolio_companies"
+    - "successful_exits"
+  categorical_cols:
+    - "investor_type"
+    - "headquarters_city"
+    - "headquarters_state"
+    - "investment_stage"
+    - "preferred_sector"
+  binary_cols:
+    - "active_fund"
+    - "ai_focus"
+    - "fintech_focus"
+    - "healthtech_focus"
+    - "agritech_focus"
+
+train:
+  target_transform: "log1p"
+  models:
+    baseline:
+      alpha: 1.0
+    random_forest:
+      n_estimators: 100
+      max_depth: 10
+      random_state: 42
+    xgboost:
+      n_estimators: 100
+      max_depth: 6
+      learning_rate: 0.05
+      random_state: 42
+
+mlflow:
+  experiment_name: "StartupFund_AI_Funding_Prediction"
+  tracking_uri: "sqlite:///mlflow.db"
+  registry_model_name: "StartupFundAI_ChampionModel"
+  quality_gate:
+    min_r2: 0.60

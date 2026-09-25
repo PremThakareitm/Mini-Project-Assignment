@@ -1,0 +1,23 @@
+stages:
+  prepare:
+    cmd: .venv/bin/python scripts/prepare_data.py
+    deps:
+      - Indian_Investor_Dataset_2026.csv
+      - scripts/prepare_data.py
+      - src/data/ingest_validate.py
+      - src/data/clean_data.py
+    outs:
+      - data/processed/prepared_data.csv
+
+  train:
+    cmd: .venv/bin/python scripts/train_pipeline.py
+    deps:
+      - data/processed/prepared_data.csv
+      - scripts/train_pipeline.py
+      - src/features/build_features.py
+      - src/models/train.py
+    params:
+      - train.target_transform
+      - train.models.random_forest.n_estimators
+    outs:
+      - artifacts/model.joblib

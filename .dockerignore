@@ -1,0 +1,11 @@
+.venv/
+.git/
+.gitignore
+__pycache__/
+*.pyc
+.pytest_cache/
+.coverage
+mlruns/
+mlflow.db
+.dvc/cache/
+.dvc/tmp/

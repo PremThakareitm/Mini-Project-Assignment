@@ -1,0 +1,15 @@
+version: '3.8'
+
+services:
+  startupfund-ai:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: premthakare/startupfund-ai:latest
+    container_name: startupfund_ai_container
+    ports:
+      - "8000:8000"
+      - "8501:8501"
+    environment:
+      - API_URL=http://localhost:8000
+    restart: unless-stopped

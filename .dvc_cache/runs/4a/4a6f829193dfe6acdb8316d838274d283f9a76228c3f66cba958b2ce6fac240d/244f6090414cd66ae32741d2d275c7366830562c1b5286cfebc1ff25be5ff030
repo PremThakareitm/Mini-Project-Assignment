@@ -1,0 +1,27 @@
+cmd: .venv/bin/python scripts/train_pipeline.py
+deps:
+- path: data/processed/prepared_data.csv
+  hash: md5
+  md5: da766dddd1c5bc75797cea021956e4fc
+  size: 872629
+- path: scripts/train_pipeline.py
+  hash: md5
+  md5: 0b7c2874731b91f5db51ca0f00ff8f14
+  size: 635
+- path: src/features/build_features.py
+  hash: md5
+  md5: 985f9383718a2efe47efacddf7d5706c
+  size: 4155
+- path: src/models/train.py
+  hash: md5
+  md5: 638b318469f077289a8a417084d2d5cd
+  size: 8324
+params:
+  params.yaml:
+    train.models.random_forest.n_estimators: 100
+    train.target_transform: log1p
+outs:
+- path: artifacts/model.joblib
+  hash: md5
+  md5: 9f832797fd213048e7b41287088d987c
+  size: 5754
