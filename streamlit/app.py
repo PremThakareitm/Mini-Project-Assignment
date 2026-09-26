@@ -115,6 +115,16 @@ def format_inr(amount: float) -> str:
         return f"₹{amount:.2f}"
 
 
+def format_usd(amount: float) -> str:
+    """Format USD currency string (for backward compatibility)."""
+    if amount >= 1_000_000:
+        return f"${amount / 1_000_000:.2f} Million"
+    elif amount >= 1_000:
+        return f"${amount / 1_000:.1f} Thousand"
+    else:
+        return f"${amount:.2f}"
+
+
 def check_api_health():
     """Verify backend API health status."""
     try:
@@ -131,7 +141,13 @@ def execute_predict(payload: dict) -> dict:
     try:
         response = requests.post(f"{API_URL}/predict", json=payload, timeout=2.5)
         if response.status_code == 200:
-            return response.json()
+            api_response = response.json()
+            # Add backward compatibility by adding missing field names
+            if 'expected_funding_inr' in api_response and 'expected_funding_usd' not in api_response:
+                api_response['expected_funding_usd'] = api_response['expected_funding_inr'] / 83.0  # Approximate conversion
+            elif 'expected_funding_usd' in api_response and 'expected_funding_inr' not in api_response:
+                api_response['expected_funding_inr'] = api_response['expected_funding_usd'] * 83.0  # Approximate conversion
+            return api_response
     except Exception:
         pass
 
@@ -142,9 +158,11 @@ def execute_predict(payload: dict) -> dict:
         pred_log = model.predict(input_df)[0]
         pred_inr = float(np.expm1(pred_log))
         pred_inr = max(pred_inr, 50_000.0)
+        pred_usd = pred_inr / 83.0  # Approximate conversion
         return {
             "status": "success_local_engine",
             "expected_funding_inr": round(pred_inr, 2),
+            "expected_funding_usd": round(pred_usd, 2),  # Add backward compatibility
             "formatted_funding": format_inr(pred_inr),
             "log_prediction": float(round(pred_log, 4)),
             "input_summary": payload,
@@ -152,9 +170,11 @@ def execute_predict(payload: dict) -> dict:
 
     # Static Floor Fallback
     fallback_inr = 1_350_000.0
+    fallback_usd = fallback_inr / 83.0  # Approximate conversion
     return {
         "status": "success_static_engine",
         "expected_funding_inr": fallback_inr,
+        "expected_funding_usd": round(fallback_usd, 2),  # Add backward compatibility
         "formatted_funding": format_inr(fallback_inr),
         "log_prediction": float(round(np.log1p(fallback_inr), 4)),
         "input_summary": payload,
@@ -168,7 +188,26 @@ def execute_explain(payload: dict) -> dict:
     try:
         res = requests.post(f"{API_URL}/explain", json=payload, timeout=2.5)
         if res.status_code == 200:
-            return res.json()
+            api_response = res.json()
+            # Add backward compatibility for field names
+            if 'predicted_funding_inr' in api_response and 'predicted_funding_usd' not in api_response:
+                api_response['predicted_funding_usd'] = api_response['predicted_funding_inr'] / 83.0
+                api_response['base_funding_usd'] = api_response.get('base_funding_inr', 0) / 83.0
+                api_response['total_delta_usd'] = api_response.get('total_delta_inr', 0) / 83.0
+            elif 'predicted_funding_usd' in api_response and 'predicted_funding_inr' not in api_response:
+                api_response['predicted_funding_inr'] = api_response['predicted_funding_usd'] * 83.0
+                api_response['base_funding_inr'] = api_response.get('base_funding_usd', 0) * 83.0
+                api_response['total_delta_inr'] = api_response.get('total_delta_usd', 0) * 83.0
+
+            # Add backward compatibility for impact fields in factors
+            for factor_list in [api_response.get('positive_factors', []), api_response.get('negative_factors', [])]:
+                for factor in factor_list:
+                    if 'impact_inr' in factor and 'impact_usd' not in factor:
+                        factor['impact_usd'] = factor['impact_inr'] / 83.0
+                    elif 'impact_usd' in factor and 'impact_inr' not in factor:
+                        factor['impact_inr'] = factor['impact_usd'] * 83.0
+
+            return api_response
     except Exception:
         pass
 
@@ -185,11 +224,25 @@ def execute_explain(payload: dict) -> dict:
             "negative_factors": [],
             "feature_attributions": [{"feature": "investment_stage", "importance": 0.35}],
         }
+
+    # Add backward compatibility fields
+    expl['predicted_funding_usd'] = expl['predicted_funding_inr'] / 83.0
+    expl['base_funding_usd'] = expl['base_funding_inr'] / 83.0
+    expl['total_delta_usd'] = expl['total_delta_inr'] / 83.0
+
+    for factor_list in [expl.get('positive_factors', []), expl.get('negative_factors', [])]:
+        for factor in factor_list:
+            if 'impact_inr' in factor:
+                factor['impact_usd'] = factor['impact_inr'] / 83.0
+
     return {
         "status": "success_local",
         "predicted_funding_inr": expl["predicted_funding_inr"],
+        "predicted_funding_usd": expl["predicted_funding_usd"],  # Add backward compatibility
         "base_funding_inr": expl["base_funding_inr"],
+        "base_funding_usd": expl["base_funding_usd"],  # Add backward compatibility
         "total_delta_inr": expl["total_delta_inr"],
+        "total_delta_usd": expl["total_delta_usd"],  # Add backward compatibility
         "positive_factors": expl["positive_factors"],
         "negative_factors": expl["negative_factors"],
         "feature_attributions": expl["feature_attributions"],
@@ -347,16 +400,23 @@ elif page == "🎯 Funding Predictor":
         st.balloons()
         st.success("✅ Funding Check Size Prediction Complete!")
 
+        # Handle backward compatibility for both old (USD) and new (INR) field names
+        funding_amount = data.get('expected_funding_inr', data.get('expected_funding_usd', 0))
+        funding_delta_symbol = "₹" if 'expected_funding_inr' in data else "$"
+
         res_col1, res_col2 = st.columns(2)
         with res_col1:
-            st.metric("Expected Funding Check Size", data["formatted_funding"], delta=f"₹{data['expected_funding_inr']:,.2f}")
+            st.metric("Expected Funding Check Size", data["formatted_funding"], delta=f"{funding_delta_symbol}{funding_amount:,.2f}")
         with res_col2:
             st.metric("Log1p Model Value", f"{data['log_prediction']:.4f}")
 
         # Add prediction range estimate
-        lower_bound = data['expected_funding_inr'] * 0.8
-        upper_bound = data['expected_funding_inr'] * 1.2
-        st.info(f"📊 **Estimated Range:** {format_inr(lower_bound)} - {format_inr(upper_bound)} (80% confidence interval)")
+        lower_bound = funding_amount * 0.8
+        upper_bound = funding_amount * 1.2
+        if 'expected_funding_inr' in data:
+            st.info(f"📊 **Estimated Range:** {format_inr(lower_bound)} - {format_inr(upper_bound)} (80% confidence interval)")
+        else:
+            st.info(f"📊 **Estimated Range:** {format_usd(lower_bound)} - {format_usd(upper_bound)} (80% confidence interval)")
 
         st.session_state["last_payload"] = payload
         st.session_state["last_prediction"] = data
@@ -393,7 +453,10 @@ elif page == "💡 Prediction Explanation":
             st.subheader("🟢 Positive Value Drivers")
             pos_df = pd.DataFrame(expl["positive_factors"])
             if not pos_df.empty:
-                st.dataframe(pos_df[["feature", "value", "impact_inr", "percentage_impact"]], use_container_width=True)
+                # Handle backward compatibility for impact field names
+                impact_col = "impact_inr" if "impact_inr" in pos_df.columns else "impact_usd"
+                display_cols = ["feature", "value", impact_col, "percentage_impact"]
+                st.dataframe(pos_df[display_cols], use_container_width=True)
             else:
                 st.write("No positive drivers identified.")
 
@@ -401,7 +464,10 @@ elif page == "💡 Prediction Explanation":
             st.subheader("🔴 Negative Value Drivers")
             neg_df = pd.DataFrame(expl["negative_factors"])
             if not neg_df.empty:
-                st.dataframe(neg_df[["feature", "value", "impact_inr", "percentage_impact"]], use_container_width=True)
+                # Handle backward compatibility for impact field names
+                impact_col = "impact_inr" if "impact_inr" in neg_df.columns else "impact_usd"
+                display_cols = ["feature", "value", impact_col, "percentage_impact"]
+                st.dataframe(neg_df[display_cols], use_container_width=True)
             else:
                 st.write("No negative drivers identified.")
 
@@ -422,10 +488,10 @@ elif page == "⚡ What-If Simulator":
 
     col1, col2 = st.columns(2)
     with col1:
-        stage = st.select_slider("Simulated Stage", options=["Pre-Seed", "Seed", "Series A", "Series B", "Series C", "Private Equity"], value="Series A")
+        stage = st.select_slider("Simulated Stage", options=["Pre-Seed", "Seed", "Series A", "Series B", "Series C", "Series D", "Private Equity", "IPO"], value="Series A")
         ports = st.slider("Simulated Portfolio Size", 5, 200, 50)
     with col2:
-        sector = st.selectbox("Simulated Sector", ["FinTech", "DeepTech", "ClimateTech", "HealthTech", "EdTech"])
+        sector = st.selectbox("Simulated Sector", ["FinTech", "DeepTech", "ClimateTech", "HealthTech", "EdTech", "Consumer", "AgriTech", "SaaS", "E-commerce"])
         exits = st.slider("Simulated Exits", 0, 50, 10)
 
     sim_payload = {
@@ -446,7 +512,10 @@ elif page == "⚡ What-If Simulator":
     }
 
     sim_data = execute_predict(sim_payload)
-    st.metric("Simulated Expected Funding Check Size", sim_data["formatted_funding"], delta=f"₹{sim_data['expected_funding_inr']:,.2f}")
+    # Handle backward compatibility for both old (USD) and new (INR) field names
+    sim_funding_amount = sim_data.get('expected_funding_inr', sim_data.get('expected_funding_usd', 0))
+    sim_delta_symbol = "₹" if 'expected_funding_inr' in sim_data else "$"
+    st.metric("Simulated Expected Funding Check Size", sim_data["formatted_funding"], delta=f"{sim_delta_symbol}{sim_funding_amount:,.2f}")
 
 
 # ==========================================
