@@ -13,10 +13,12 @@ import matplotlib.pyplot as plt
 import seaborn as sns
 
 from sklearn.model_selection import train_test_split
-from sklearn.linear_model import Ridge
+from sklearn.linear_model import Ridge, Lasso, ElasticNet
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.pipeline import Pipeline
 from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, median_absolute_error, mean_absolute_percentage_error
+from sklearn.feature_selection import SelectKBest, f_regression, mutual_info_regression
+from sklearn.decomposition import PCA
 
 import mlflow
 import mlflow.sklearn
@@ -26,6 +28,14 @@ from src.data.clean_data import clean_dataset
 from src.features.build_features import (
     StartupInvestorFeatureTransformer,
     build_preprocessor_pipeline,
+    build_advanced_preprocessor_pipeline,
+)
+from src.features.advanced_feature_engineering import (
+    FilterFeatureSelector,
+    WrapperFeatureSelector,
+    EmbeddedFeatureSelector,
+    PCAReducer,
+    ComprehensiveFeatureEngineeringPipeline,
 )
 
 # Attempt XGBoost import
@@ -102,15 +112,20 @@ def train_and_evaluate_all_models(
     tracking_uri: str = "sqlite:///mlflow.db",
     experiment_name: str = "StartupFund_AI_Funding_Prediction",
     artifacts_dir: str = "artifacts",
+    use_advanced_features: bool = True,
+    enable_feature_selection: bool = False,
+    enable_pca: bool = False,
 ) -> dict:
     """
     Run 3 ML experiments (Baseline Ridge, Random Forest, XGBoost / GradientBoosting),
     log metrics/artifacts to MLflow, select champion model, register it, and export pipeline.
+    
+    Enhanced with Phase 1-6 feature engineering techniques from syllabus.
     """
     os.makedirs(artifacts_dir, exist_ok=True)
     os.makedirs("data/processed", exist_ok=True)
 
-    # 1. Ingest, Clean & Validate
+    # 1. Ingest, Clean & Validate (Phase 1 & 2)
     raw_df = load_raw_data(data_path)
     cleaned_df = clean_dataset(raw_df)
 
@@ -120,7 +135,7 @@ def train_and_evaluate_all_models(
 
     cleaned_df.to_csv("data/processed/prepared_data.csv", index=False)
 
-    # 2. Exclude Leakage Columns & Define Features/Target
+    # 2. Exclude Leakage Columns & Define Features/Target (Phase 6: Leakage Prevention)
     target_col = "average_ticket_inr"
     leakage_cols = ["min_investment_inr", "max_investment_inr", "investor_id", "website", "last_updated", "funding_date"]
 
@@ -129,15 +144,15 @@ def train_and_evaluate_all_models(
     X = feature_df.drop(columns=[target_col])
     y = feature_df[target_col].values
 
-    # Target transformation log1p for training
+    # Target transformation log1p for training (Phase 2: Transformations)
     y_log = np.log1p(y)
 
-    # Split Train/Test (80/20)
+    # Split Train/Test (80/20) - Phase 1: Pipeline Foundation
     X_train, X_test, y_train_log, y_test_log = train_test_split(
         X, y_log, test_size=0.2, random_state=42
     )
 
-    y_test_usd = np.expm1(y_test_log)
+    y_test_inr = np.expm1(y_test_log)
 
     # Save reference datasets for drift monitoring and reproducibility
     X_train.to_csv("data/processed/train.csv", index=False)
@@ -169,34 +184,67 @@ def train_and_evaluate_all_models(
 
     for model_name, regressor in models_dict.items():
         with mlflow.start_run(run_name=model_name):
-            # Construct single reproducible sklearn Pipeline
-            full_pipeline = Pipeline([
-                ("feature_engineer", StartupInvestorFeatureTransformer()),
-                ("preprocessor", build_preprocessor_pipeline()),
-                ("regressor", regressor)
-            ])
+            # Phase 3: Feature Creation with Advanced Options
+            feature_engineer = StartupInvestorFeatureTransformer(
+                current_year=2026,
+                enable_advanced_features=use_advanced_features
+            )
+            
+            # Phase 2 & 4: Advanced Preprocessing with Feature Selection
+            if enable_pca:
+                preprocessor = build_advanced_preprocessor_pipeline(
+                    scaling_method='standard',
+                    enable_pca=True,
+                    pca_variance=0.95
+                )
+            else:
+                preprocessor = build_preprocessor_pipeline(
+                    scaling_method='standard',
+                    enable_variance_threshold=enable_feature_selection
+                )
+
+            # Construct single reproducible sklearn Pipeline (Phase 6: Pipeline Automation)
+            pipeline_steps = [
+                ("feature_engineer", feature_engineer),
+                ("preprocessor", preprocessor),
+            ]
+            
+            # Phase 4: Feature Selection (Embedded Method)
+            if enable_feature_selection and model_name == "Baseline_Ridge":
+                # Add Lasso for embedded feature selection
+                pipeline_steps.append(("feature_selector", SelectFromModel(
+                    Lasso(alpha=0.01, random_state=42),
+                    threshold='median'
+                )))
+            
+            pipeline_steps.append(("regressor", regressor))
+            
+            full_pipeline = Pipeline(pipeline_steps)
 
             # Fit on training fold
             full_pipeline.fit(X_train, y_train_log)
 
-            # Predict on test set & invert log transform back to original USD scale
+            # Predict on test set & invert log transform back to original INR scale
             y_pred_log = full_pipeline.predict(X_test)
-            y_pred_usd = np.expm1(y_pred_log)
+            y_pred_inr = np.expm1(y_pred_log)
 
-            # Calculate evaluation metrics on original $ scale
-            metrics = calculate_regression_metrics(y_test_usd, y_pred_usd)
+            # Calculate evaluation metrics on original ₹ scale
+            metrics = calculate_regression_metrics(y_test_inr, y_pred_inr)
 
             # Log parameters to MLflow
             mlflow.log_param("model_name", model_name)
             mlflow.log_param("target_transform", "log1p")
-            mlflow.log_param("leakage_prevention", "Excluded min_investment_usd & max_investment_usd")
+            mlflow.log_param("leakage_prevention", "Excluded min_investment_inr & max_investment_inr")
+            mlflow.log_param("advanced_features", use_advanced_features)
+            mlflow.log_param("feature_selection", enable_feature_selection)
+            mlflow.log_param("pca_enabled", enable_pca)
 
             # Log metrics to MLflow
             for metric_name, val in metrics.items():
                 mlflow.log_metric(metric_name, val)
 
             # Generate and log evaluation plots
-            pred_plot, res_plot = generate_evaluation_plots(y_test_usd, y_pred_usd, model_name, artifacts_dir)
+            pred_plot, res_plot = generate_evaluation_plots(y_test_inr, y_pred_inr, model_name, artifacts_dir)
             mlflow.log_artifact(pred_plot)
             mlflow.log_artifact(res_plot)
 
@@ -222,6 +270,9 @@ def train_and_evaluate_all_models(
 
     print(f"\n🏆 Champion Model Selected: {best_model_name} (R²: {best_r2:.4f})")
     print(f"Artifact exported successfully to: {model_export_path}")
+    print(f"Advanced Features: {'Enabled' if use_advanced_features else 'Disabled'}")
+    print(f"Feature Selection: {'Enabled' if enable_feature_selection else 'Disabled'}")
+    print(f"PCA: {'Enabled' if enable_pca else 'Disabled'}")
 
     return {
         "best_model_name": best_model_name,
