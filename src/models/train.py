@@ -16,7 +16,7 @@ from sklearn.model_selection import train_test_split
 from sklearn.linear_model import Ridge
 from sklearn.ensemble import RandomForestRegressor, GradientBoostingRegressor
 from sklearn.pipeline import Pipeline
-from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, median_absolute_error
+from sklearn.metrics import mean_absolute_error, mean_squared_error, r2_score, median_absolute_error, mean_absolute_percentage_error
 
 import mlflow
 import mlflow.sklearn
@@ -37,7 +37,7 @@ except ImportError:
 
 
 def calculate_regression_metrics(y_true, y_pred) -> dict:
-    """Calculate MAE, RMSE, R2, MedianAE, MAPE on original scale ($)."""
+    """Calculate comprehensive regression metrics on original scale (₹)."""
     mae = float(mean_absolute_error(y_true, y_pred))
     rmse = float(np.sqrt(mean_squared_error(y_true, y_pred)))
     r2 = float(r2_score(y_true, y_pred))
@@ -46,12 +46,24 @@ def calculate_regression_metrics(y_true, y_pred) -> dict:
     mask = y_true != 0
     mape = float(np.mean(np.abs((y_true[mask] - y_pred[mask]) / y_true[mask])) * 100)
 
+    # Additional metrics
+    mse = float(mean_squared_error(y_true, y_pred))
+
+    # Calculate within 20% accuracy
+    within_20_percent = float(np.mean(np.abs((y_true - y_pred) / y_true) <= 0.20) * 100)
+
+    # Calculate within 30% accuracy
+    within_30_percent = float(np.mean(np.abs((y_true - y_pred) / y_true) <= 0.30) * 100)
+
     return {
         "MAE": mae,
         "RMSE": rmse,
+        "MSE": mse,
         "R2": r2,
         "MedianAE": median_ae,
         "MAPE": mape,
+        "Within_20_Percent": within_20_percent,
+        "Within_30_Percent": within_30_percent,
     }
 
 
@@ -61,10 +73,10 @@ def generate_evaluation_plots(y_true, y_pred, model_name: str, output_dir: str =
 
     # 1. Prediction vs Actual Scatter Plot
     fig, ax = plt.subplots(figsize=(8, 6))
-    ax.scatter(y_true / 1e6, y_pred / 1e6, alpha=0.4, color="#028090")
-    ax.plot([y_true.min()/1e6, y_true.max()/1e6], [y_true.min()/1e6, y_true.max()/1e6], 'r--', lw=2)
-    ax.set_xlabel("Actual Funding ($ Millions)")
-    ax.set_ylabel("Predicted Funding ($ Millions)")
+    ax.scatter(y_true / 1e7, y_pred / 1e7, alpha=0.4, color="#028090")
+    ax.plot([y_true.min()/1e7, y_true.max()/1e7], [y_true.min()/1e7, y_true.max()/1e7], 'r--', lw=2)
+    ax.set_xlabel("Actual Funding (₹ Crores)")
+    ax.set_ylabel("Predicted Funding (₹ Crores)")
     ax.set_title(f"Prediction vs Actual - {model_name}")
     plt.tight_layout()
     pred_plot_path = os.path.join(output_dir, f"{model_name}_prediction_scatter.png")
@@ -72,10 +84,10 @@ def generate_evaluation_plots(y_true, y_pred, model_name: str, output_dir: str =
     plt.close()
 
     # 2. Residual Distribution Plot
-    residuals = (y_true - y_pred) / 1e6
+    residuals = (y_true - y_pred) / 1e7
     fig, ax = plt.subplots(figsize=(8, 5))
     sns.histplot(residuals, kde=True, color="#B5451B", ax=ax)
-    ax.set_xlabel("Residuals ($ Millions)")
+    ax.set_xlabel("Residuals (₹ Crores)")
     ax.set_title(f"Residual Distribution - {model_name}")
     plt.tight_layout()
     res_plot_path = os.path.join(output_dir, f"{model_name}_residuals.png")
@@ -109,8 +121,8 @@ def train_and_evaluate_all_models(
     cleaned_df.to_csv("data/processed/prepared_data.csv", index=False)
 
     # 2. Exclude Leakage Columns & Define Features/Target
-    target_col = "average_ticket_usd"
-    leakage_cols = ["min_investment_usd", "max_investment_usd", "investor_id", "website", "last_updated", "funding_date"]
+    target_col = "average_ticket_inr"
+    leakage_cols = ["min_investment_inr", "max_investment_inr", "investor_id", "website", "last_updated", "funding_date"]
 
     feature_df = cleaned_df.drop(columns=[c for c in leakage_cols if c in cleaned_df.columns])
 
@@ -196,7 +208,7 @@ def train_and_evaluate_all_models(
 
             results_summary[model_name] = metrics
 
-            print(f"[{model_name}] MAE: ${metrics['MAE']:,.2f} | RMSE: ${metrics['RMSE']:,.2f} | R²: {metrics['R2']:.4f}")
+            print(f"[{model_name}] MAE: ₹{metrics['MAE']:,.2f} | RMSE: ₹{metrics['RMSE']:,.2f} | R²: {metrics['R2']:.4f} | Within 20%: {metrics['Within_20_Percent']:.1f}%")
 
             # Track best champion model based on R² and MAE
             if metrics["R2"] > best_r2:

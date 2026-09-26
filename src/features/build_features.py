@@ -17,7 +17,9 @@ STAGE_RANK_MAP = {
     "Series A": 3,
     "Series B": 4,
     "Series C": 5,
-    "Private Equity": 6,
+    "Series D": 6,
+    "Private Equity": 7,
+    "IPO": 8,
 }
 
 
@@ -31,6 +33,10 @@ class StartupInvestorFeatureTransformer(BaseEstimator, TransformerMixin):
     - is_tech_specialist
     - investment_stage_rank
     - month_sin, month_cos
+    - portfolio_density (portfolio_companies / investor_age_years)
+    - exit_intensity (successful_exits / investor_age_years)
+    - is_early_stage_investor (stage <= Seed)
+    - is_late_stage_investor (stage >= Series C)
     """
 
     def __init__(self, current_year: int = 2026):
@@ -77,6 +83,29 @@ class StartupInvestorFeatureTransformer(BaseEstimator, TransformerMixin):
         X_df["month_sin"] = np.sin(2 * np.pi * funding_month / 12)
         X_df["month_cos"] = np.cos(2 * np.pi * funding_month / 12)
 
+        # 6. Additional advanced features
+        if "portfolio_companies" in X_df.columns and "investor_age_years" in X_df.columns:
+            # Portfolio density: companies per year of operation
+            age = X_df["investor_age_years"].clip(lower=1)
+            X_df["portfolio_density"] = X_df["portfolio_companies"] / age
+
+        if "successful_exits" in X_df.columns and "investor_age_years" in X_df.columns:
+            # Exit intensity: exits per year of operation
+            age = X_df["investor_age_years"].clip(lower=1)
+            X_df["exit_intensity"] = X_df["successful_exits"] / age
+
+        if "investment_stage_rank" in X_df.columns:
+            # Early stage investor flag
+            X_df["is_early_stage_investor"] = (X_df["investment_stage_rank"] <= 2).astype(int)
+            # Late stage investor flag
+            X_df["is_late_stage_investor"] = (X_df["investment_stage_rank"] >= 5).astype(int)
+
+        if "portfolio_companies" in X_df.columns:
+            # Portfolio size buckets
+            X_df["portfolio_size_small"] = (X_df["portfolio_companies"] <= 20).astype(int)
+            X_df["portfolio_size_medium"] = ((X_df["portfolio_companies"] > 20) & (X_df["portfolio_companies"] <= 50)).astype(int)
+            X_df["portfolio_size_large"] = (X_df["portfolio_companies"] > 50).astype(int)
+
         return X_df
 
 
@@ -108,6 +137,13 @@ def build_preprocessor_pipeline(
             "investment_stage_rank",
             "month_sin",
             "month_cos",
+            "portfolio_density",
+            "exit_intensity",
+            "is_early_stage_investor",
+            "is_late_stage_investor",
+            "portfolio_size_small",
+            "portfolio_size_medium",
+            "portfolio_size_large",
         ]
 
     numeric_transformer = Pipeline(steps=[

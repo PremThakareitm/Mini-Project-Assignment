@@ -4,7 +4,7 @@ data:
   train_path: "data/processed/train.csv"
   test_path: "data/processed/test.csv"
   reference_path: "data/processed/training_reference.csv"
-  target_col: "average_ticket_usd"
+  target_col: "average_ticket_inr"
   test_size: 0.2
   random_state: 42
 

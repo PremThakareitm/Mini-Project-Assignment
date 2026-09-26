@@ -25,7 +25,7 @@ class InvestorPredictionInput(BaseModel):
 
 class PredictionResponse(BaseModel):
     status: str
-    expected_funding_usd: float
+    expected_funding_inr: float
     formatted_funding: str
     log_prediction: float
     input_summary: Dict[str, Any]
@@ -33,9 +33,9 @@ class PredictionResponse(BaseModel):
 
 class ExplanationResponse(BaseModel):
     status: str
-    predicted_funding_usd: float
-    base_funding_usd: float
-    total_delta_usd: float
+    predicted_funding_inr: float
+    base_funding_inr: float
+    total_delta_inr: float
     positive_factors: List[Dict[str, Any]]
     negative_factors: List[Dict[str, Any]]
     feature_attributions: List[Dict[str, Any]]
@@ -50,5 +50,5 @@ class HealthResponse(BaseModel):
 
 class MetricsResponse(BaseModel):
     total_predictions_served: int
-    average_prediction_usd: float
+    average_prediction_inr: float
     last_prediction_timestamp: Optional[str]

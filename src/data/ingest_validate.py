@@ -19,9 +19,9 @@ EXPECTED_COLUMNS = [
     "founded_year",
     "investment_stage",
     "preferred_sector",
-    "min_investment_usd",
-    "max_investment_usd",
-    "average_ticket_usd",
+    "min_investment_inr",
+    "max_investment_inr",
+    "average_ticket_inr",
     "portfolio_companies",
     "successful_exits",
     "active_fund",
@@ -57,9 +57,9 @@ def validate_schema(df: pd.DataFrame) -> Tuple[bool, str]:
         return False, "Dataset is empty."
 
     # Validate target column numeric range
-    if "average_ticket_usd" in df.columns:
-        if (df["average_ticket_usd"] < 0).any():
-            return False, "Found negative values in average_ticket_usd target."
+    if "average_ticket_inr" in df.columns:
+        if (df["average_ticket_inr"] < 0).any():
+            return False, "Found negative values in average_ticket_inr target."
 
     # Validate logical bounds (e.g. successful_exits <= portfolio_companies)
     if "successful_exits" in df.columns and "portfolio_companies" in df.columns:
@@ -83,8 +83,8 @@ def produce_data_summary(df: pd.DataFrame) -> Dict[str, Any]:
         "dtypes": {col: str(dtype) for col, dtype in df.dtypes.items()},
     }
 
-    if "average_ticket_usd" in df.columns:
-        target_series = df["average_ticket_usd"]
+    if "average_ticket_inr" in df.columns:
+        target_series = df["average_ticket_inr"]
         summary["target_distribution"] = {
             "min": float(target_series.min()),
             "max": float(target_series.max()),

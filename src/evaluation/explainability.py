@@ -63,15 +63,15 @@ def explain_single_prediction(pipeline, input_df: pd.DataFrame) -> Dict[str, Any
     Compute local feature attribution breakdown for a single prediction request.
     """
     global_importances = get_global_feature_importance(pipeline)
-    
-    # Calculate baseline average prediction ($1.5M)
-    base_pred_usd = 1_500_000.0
+
+    # Calculate baseline average prediction (₹1.5M)
+    base_pred_inr = 1_500_000.0
 
     # Get model prediction for current input
     pred_log = pipeline.predict(input_df)[0]
-    pred_usd = float(np.expm1(pred_log))
+    pred_inr = float(np.expm1(pred_log))
 
-    delta_total = pred_usd - base_pred_usd
+    delta_total = pred_inr - base_pred_inr
 
     positive_factors = []
     negative_factors = []
@@ -79,26 +79,26 @@ def explain_single_prediction(pipeline, input_df: pd.DataFrame) -> Dict[str, Any
     for item in global_importances[:6]:
         feat = item["feature"]
         weight = item["importance"]
-        contrib_usd = delta_total * weight
+        contrib_inr = delta_total * weight
 
         val_str = str(input_df[feat].iloc[0]) if feat in input_df.columns else "N/A"
 
         factor_info = {
             "feature": feat,
             "value": val_str,
-            "impact_usd": round(contrib_usd, 2),
+            "impact_inr": round(contrib_inr, 2),
             "percentage_impact": round(weight * 100, 1),
         }
 
-        if contrib_usd >= 0:
+        if contrib_inr >= 0:
             positive_factors.append(factor_info)
         else:
             negative_factors.append(factor_info)
 
     return {
-        "base_funding_usd": base_pred_usd,
-        "predicted_funding_usd": pred_usd,
-        "total_delta_usd": round(delta_total, 2),
+        "base_funding_inr": base_pred_inr,
+        "predicted_funding_inr": pred_inr,
+        "total_delta_inr": round(delta_total, 2),
         "positive_factors": positive_factors,
         "negative_factors": negative_factors,
         "feature_attributions": global_importances,

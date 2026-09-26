@@ -38,8 +38,8 @@ def test_predict_endpoint():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] in ["success", "success_fallback"]
-    assert data["expected_funding_usd"] > 0
-    assert "$" in data["formatted_funding"]
+    assert data["expected_funding_inr"] > 0
+    assert "₹" in data["formatted_funding"]
 
 
 def test_explain_endpoint():
@@ -62,7 +62,7 @@ def test_explain_endpoint():
     response = client.post("/explain", json=payload)
     assert response.status_code == 200
     data = response.json()
-    assert "predicted_funding_usd" in data
+    assert "predicted_funding_inr" in data
     assert "positive_factors" in data
 
 

@@ -35,6 +35,20 @@ def clean_dataset(df: pd.DataFrame) -> pd.DataFrame:
     """Apply reproducible cleaning steps to raw DataFrame."""
     df_clean = df.copy()
 
+    # 0. Rename USD columns to INR (currency conversion)
+    column_mapping = {
+        "min_investment_usd": "min_investment_inr",
+        "max_investment_usd": "max_investment_inr",
+        "average_ticket_usd": "average_ticket_inr"
+    }
+    df_clean = df_clean.rename(columns=column_mapping)
+
+    # Convert USD values to INR (assuming 1 USD = 83 INR)
+    usd_to_inr_rate = 83.0
+    for old_col, new_col in column_mapping.items():
+        if new_col in df_clean.columns:
+            df_clean[new_col] = df_clean[new_col] * usd_to_inr_rate
+
     # 1. Clean string columns (trim whitespace)
     str_cols = df_clean.select_dtypes(include=["object"]).columns
     for col in str_cols:
